@@ -11,6 +11,7 @@ import org.junit.Assert
 import org.junit.Test
 import java.io.*
 import java.net.URLClassLoader
+import kotlin.io.path.createTempDirectory
 import kotlin.script.experimental.api.*
 import kotlin.script.experimental.host.toScriptSource
 import kotlin.script.experimental.jvm.baseClassLoader
@@ -99,8 +100,8 @@ class SimpleMainKtsTest {
     @Test
     fun testCache() {
         val script = File("$TEST_DATA_ROOT/import-test.smain.kts")
-        val cache = createTempDir("main.kts.test")
-
+//        val cache = createTempDir("main.kts.test")
+        val cache = createTempDirectory("main.kts.test").toFile()
         try {
             Assert.assertTrue(cache.exists() && cache.listFiles { f: File -> f.extension == "jar" }?.isEmpty() == true)
             val out1 = evalSuccessWithOut(script)
@@ -109,11 +110,11 @@ class SimpleMainKtsTest {
 
             val out2 = evalSuccessWithOut(script, cache)
             Assert.assertEquals(outFromImportTest, out2)
-            val casheFile = cache.listFiles { f: File -> f.extension.equals("jar", ignoreCase = true) }?.firstOrNull()
-            Assert.assertTrue(casheFile != null && casheFile.exists())
+            val cacheFile = cache.listFiles { f: File -> f.extension.equals("jar", ignoreCase = true) }?.firstOrNull()
+            Assert.assertTrue(cacheFile != null && cacheFile.exists())
 
             val out3 = captureOut {
-                val classLoader = URLClassLoader(arrayOf(casheFile!!.toURI().toURL()), null)
+                val classLoader = URLClassLoader(arrayOf(cacheFile!!.toURI().toURL()), null)
                 val clazz = classLoader.loadClass("Import_test_smain")
                 val mainFn = clazz.getDeclaredMethod("main", Array<String>::class.java)
                 mainFn.invoke(null, arrayOf<String>())
@@ -139,8 +140,9 @@ class SimpleMainKtsTest {
             getResource("$simpleName.class")
         }
 
-        DataInputStream(ByteArrayInputStream(scriptClassResource.readBytes())).use { stream ->
-            val header = stream.readInt()
+        scriptClassResource?.let { DataInputStream(ByteArrayInputStream(it.readBytes())) }
+            .use { stream ->
+            val header = stream!!.readInt()
             if (0xCAFEBABE.toInt() != header) throw IOException("Invalid header class header: $header")
             stream.readUnsignedShort() // minor
             val major = stream.readUnsignedShort()
@@ -195,3 +197,4 @@ private fun <T> withMainKtsCacheDir(value: String?, body: () -> T): T {
         else System.setProperty(COMPILED_SCRIPTS_CACHE_DIR_PROPERTY, prevCacheDir)
     }
 }
+
